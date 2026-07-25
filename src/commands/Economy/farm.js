@@ -457,4 +457,459 @@ function renderRealEstate(farm) {
       })
     );
 
-  const buttons = Object.
+  const buttons = Object.entries(REAL_ESTATE).map(([key, r]) => {
+    const locked = !isUnlocked(farm, r);
+    const owned = farm.buildings.includes(key);
+    return new ButtonBuilder()
+      .setCustomId(`farm_build_${key}`)
+      .setLabel(locked ? `🔒 ${r.label}` : owned ? `✅ ${r.label}` : `بناء: ${r.label}`)
+      .setEmoji(r.emoji)
+      .setStyle(owned ? ButtonStyle.Secondary : ButtonStyle.Success)
+      .setDisabled(locked || owned);
+  });
+  const row1 = new ActionRowBuilder().addComponents(buttons);
+  const row2 = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('farm_back').setLabel('رجوع').setStyle(ButtonStyle.Secondary));
+
+  const payload = { embeds: [embed], components: [row1, row2] };
+  return withImage(embed, payload, 'realestate');
+}
+
+function renderWorkers(farm) {
+  const embed = new EmbedBuilder()
+    .setTitle('👷🤖 قسم طاقم العمال 🤖👷')
+    .setColor(EMBED_COLOR)
+    .setDescription('وظّف طاقماً متخصصاً يساعدك على أتمتة وحماية مزرعتك — استثمار لمرة واحدة يوفر عليك مجهوداً مستمراً.')
+    .addFields(
+      Object.entries(WORKERS).map(([key, w]) => {
+        const locked = farm.level < w.unlockLevel;
+        if (locked) return { name: `${w.emoji} ${w.label} 🔒`, value: lockNote(w), inline: true };
+        const owned = farm.workers.includes(key);
+        return {
+          name: `${w.emoji} ${w.label}` + (owned ? ' ✅' : ''),
+          value: owned ? '**تم التعيين بالفعل** ✅' : `💰 التكلفة: ${money(w.cost)}\n📜 المهمة: ${w.effect}`,
+          inline: true
+        };
+      })
+    );
+
+  const buttons = Object.entries(WORKERS).map(([key, w]) => {
+    const locked = !isUnlocked(farm, w);
+    const owned = farm.workers.includes(key);
+    return new ButtonBuilder()
+      .setCustomId(`farm_hire_${key}`)
+      .setLabel(locked ? `🔒 ${w.label}` : owned ? `✅ ${w.label}` : `تعيين: ${w.label}`)
+      .setEmoji(w.emoji)
+      .setStyle(owned ? ButtonStyle.Secondary : ButtonStyle.Success)
+      .setDisabled(locked || owned);
+  });
+  const row1 = new ActionRowBuilder().addComponents(buttons);
+  const row2 = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('farm_back').setLabel('رجوع').setStyle(ButtonStyle.Secondary));
+
+  const payload = { embeds: [embed], components: [row1, row2] };
+  return withImage(embed, payload, 'workers');
+}
+
+function renderInventory(farm) {
+  const entries = Object.entries(farm.inventory);
+  const embed = new EmbedBuilder()
+    .setTitle('📦🧺 مخزون مزرعتك 🧺📦')
+    .setColor(EMBED_COLOR)
+    .setDescription(entries.length ? 'هذه كل المنتجات المخزّنة حالياً في مزرعتك، جاهزة للبيع أو للتصنيع.' : '📭 مخزونك فارغ حالياً — اذهب لقسم المحاصيل أو الحيوانات لتبدأ الإنتاج!');
+
+  if (entries.length) {
+    embed.addFields(
+      entries.map(([item, qty]) => ({
+        name: `${itemEmoji(item)} ${itemLabel(item)}`,
+        value: `الكمية: **${qty}**` + (sellPrice(item) != null ? `\nسعر البيع: ${money(sellPrice(item))}/وحدة` : ''),
+        inline: true
+      }))
+    );
+  }
+
+  const row1 = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId('farm_sell').setLabel('بيع عنصر').setEmoji('💰').setStyle(ButtonStyle.Primary).setDisabled(entries.length === 0),
+    new ButtonBuilder().setCustomId('farm_back').setLabel('رجوع').setStyle(ButtonStyle.Secondary)
+  );
+
+  const payload = { embeds: [embed], components: [row1] };
+  return withImage(embed, payload, 'inventory');
+}
+
+function renderMarket() {
+  const weather = getCurrentWeather();
+  const market = getMarketMultiplier();
+
+  const embed = new EmbedBuilder()
+    .setTitle('📊🌦️ السوق والطقس 🌦️📊')
+    .setColor(EMBED_COLOR)
+    .setDescription('راقب حالة السوق والطقس اللحظية — كلاهما يؤثر مباشرة على أرباحك وسرعة إنتاجك.')
+    .addFields(
+      { name: '🌦️ الطقس الحالي', value: `${weather.name}\n_${weather.desc}_\n📉 مضاعف نمو المحاصيل: **x${weather.yieldMult}**` },
+      {
+        name: '📈 مضاعف السوق',
+        value:
+          `القيمة الحالية: **x${market}**\n` +
+          (market > 1.2
+            ? '📈 **طفرة شرائية نشطة!** فرصة ممتازة لبيع منتجاتك الآن.'
+            : market < 0.9
+            ? '📉 السوق منخفض حالياً، يُفضّل الانتظار قليلاً قبل البيع.'
+            : '⚖️ السوق مستقر حالياً.')
+      }
+    )
+    .setFooter({ text: 'يتحدث مضاعف السوق تلقائياً كل 5 دقائق تقريباً.' });
+
+  const payload = { embeds: [embed], components: [backRow()] };
+  return withImage(embed, payload, 'market');
+}
+
+function renderHelp() {
+  const embed = new EmbedBuilder()
+    .setTitle('📖🌾 كتيب تعليمات إمبراطورية المزرعة الاقتصادية 🌾📖')
+    .setColor(EMBED_COLOR)
+    .setDescription(
+      '**دليلك الكامل لكل أنظمة اللعبة!** 🧭\n' +
+        'العملة المستخدمة هي رصيدك الحقيقي (wallet) في اقتصاد السيرفر — كل ربح أو خسارة هنا تنعكس مباشرة على رصيدك الفعلي.'
+    )
+    .addFields(
+      {
+        name: '🧭 كيف تبدأ خطوة بخطوة',
+        value:
+          '**1.** افتح `/farm` لعرض لوحتك.\n**2.** اختر "🌱 المحاصيل" وازرع محصولاً رخيصاً كالقمح أو الجزر.\n**3.** انتظر انتهاء وقت النمو ثم اضغط "حصاد الكل".\n**4.** بِع محاصيلك من "📦 المخزون والبيع" لجمع رصيد.\n**5.** كرر العملية وارفع مستواك لفتح محاصيل وحيوانات ومصانع أقوى!'
+      },
+      {
+        name: '📶 نظام المستويات والفتح التدريجي',
+        value:
+          'تكسب خبرة (✨) عند حصاد المحاصيل. عتبة الترقية = **المستوى الحالي × 200** خبرة.\n' +
+          'كل شي في اللعبة (محاصيل، حيوانات، مصانع، عقارات، عمال، وحتى عدد الأراضي المتاحة) **يُفتح تدريجياً** مع ارتفاع مستواك — كلما ارتفع مستواك زادت إمكانياتك وخياراتك.'
+      },
+      {
+        name: '🗺️ الأراضي (Plots)',
+        value: 'عدد الأراضي المتاحة للزراعة في نفس الوقت = **2 + مستواك** (حد أقصى 15 أرض). ارفع مستواك لتزرع أكثر بالتوازي.'
+      },
+      {
+        name: '🌱 المحاصيل ومستوى فتحها',
+        value: Object.values(CROPS)
+          .map((c) => `${c.emoji} ${c.label}: يفتح Lv.${c.unlockLevel} — تكلفة ${money(c.cost)}، بيع ${money(c.sell)}، نمو ~${c.growSeconds}ث`)
+          .join('\n')
+      },
+      {
+        name: '🐄 الحيوانات ومستوى فتحها',
+        value: Object.values(ANIMALS)
+          .map((a) => `${a.emoji} ${a.label}: يفتح Lv.${a.unlockLevel} — تكلفة ${money(a.cost)}، ينتج ${RAW_PRODUCTS[a.product].label} كل ${a.produceSeconds}ث`)
+          .join('\n')
+      },
+      {
+        name: '🏭 المصانع ومستوى فتحها',
+        value: Object.values(FACTORIES)
+          .map((f) => {
+            const recipe = Object.entries(f.recipe).map(([i, q]) => `${q}× ${itemLabel(i)}`).join(' + ');
+            return `${f.emoji} ${f.label}: يفتح Lv.${f.unlockLevel} — ${recipe} ← ${f.outputLabel} (بناء ${money(f.cost)}، بيع ${money(f.outputSell)})`;
+          })
+          .join('\n')
+      },
+      {
+        name: '🏛️ العقارات ومستوى فتحها (شراء لمرة واحدة)',
+        value: Object.values(REAL_ESTATE).map((r) => `${r.emoji} ${r.label}: يفتح Lv.${r.unlockLevel} — ${r.effect} (${money(r.cost)})`).join('\n')
+      },
+      {
+        name: '👷 العمال ومستوى فتحهم (شراء لمرة واحدة)',
+        value: Object.values(WORKERS).map((w) => `${w.emoji} ${w.label}: يفتح Lv.${w.unlockLevel} — ${w.effect} (${money(w.cost)})`).join('\n')
+      },
+      {
+        name: '📊 السوق والطقس',
+        value:
+          'الطقس يتغير عشوائياً ويؤثر على سرعة نمو المحاصيل (يسرّعها أو يبطئها). مضاعف السوق يتغير كل ~5 دقائق، وإذا تجاوز **x1.2** تنشط "طفرة شرائية" تزيد أرباح بيعك مؤقتاً.'
+      },
+      {
+        name: '💰 كيف تباع المنتجات',
+        value: 'من قسم "📦 المخزون والبيع" اضغط زر "بيع عنصر"، ستظهر لك نافذة صغيرة اكتب فيها اسم العنصر والكمية، والباقي يصير تلقائياً حسب مضاعف السوق الحالي.'
+      }
+    );
+
+  const payload = { embeds: [embed], components: [backRow()] };
+  return withImage(embed, payload, 'help');
+}
+
+// ---------------------------------------------------------------------------
+// منطق العمليات الاقتصادية (شراء/بيع/بناء/تصنيع) مع فحص المستوى والقفل
+// ---------------------------------------------------------------------------
+async function doPlant(client, guildId, userId, cropKey) {
+  const info = CROPS[cropKey];
+  if (!info) {
+    const { farm, userData } = await loadFarm(client, guildId, userId);
+    return { farm, userData, note: '❌ محصول غير معروف.' };
+  }
+
+  const { farm: checkFarm, userData: checkData } = await loadFarm(client, guildId, userId);
+  if (!isUnlocked(checkFarm, info)) return { farm: checkFarm, userData: checkData, note: `${lockNote(info)} لهذا المحصول.` };
+  const cap = maxPlots(checkFarm.level);
+  if (checkFarm.plots.length >= cap) {
+    return { farm: checkFarm, userData: checkData, note: `🚫 وصلت للحد الأقصى من الأراضي (${cap}) لمستواك الحالي. ارفع مستواك لزيادة المساحة.` };
+  }
+
+  const userData = await EconomyService.removeMoney(client, guildId, userId, info.cost, 'farm_plant');
+  const farm = getFarmState(userData);
+  const weather = getCurrentWeather();
+  const growTime = info.growSeconds / weather.yieldMult;
+  farm.plots.push({ crop: cropKey, readyAt: Date.now() + growTime * 1000 });
+  await setEconomyData(client, guildId, userId, userData);
+  return { farm, userData, note: `🌱 زرعت ${info.emoji} ${info.label}، جاهز خلال ~${Math.round(growTime)} ثانية.` };
+}
+
+async function doHarvest(client, guildId, userId) {
+  const userData = await getEconomyData(client, guildId, userId);
+  const farm = getFarmState(userData);
+  const now = Date.now();
+  const harvested = {};
+  const remaining = [];
+  for (const plot of farm.plots) {
+    if (plot.readyAt <= now) harvested[plot.crop] = (harvested[plot.crop] || 0) + 1;
+    else remaining.push(plot);
+  }
+  if (Object.keys(harvested).length === 0) return { farm, userData, note: '⏳ لا توجد محاصيل جاهزة للحصاد بعد.' };
+
+  for (const [crop, qty] of Object.entries(harvested)) addItem(farm, crop, qty);
+  farm.plots = remaining;
+  const total = Object.values(harvested).reduce((a, b) => a + b, 0);
+  const leveledUp = addFarmExp(farm, total * 10);
+  await setEconomyData(client, guildId, userId, userData);
+  let note = '🌾 حصدت: ' + Object.entries(harvested).map(([c, q]) => `${itemEmoji(c)}×${q}`).join('، ');
+  if (leveledUp) note += ` — 🎉 وصلت للمستوى ${farm.level}!`;
+  return { farm, userData, note };
+}
+
+async function doBuyAnimal(client, guildId, userId, animalKey) {
+  const info = ANIMALS[animalKey];
+  const { farm: checkFarm, userData: checkData } = await loadFarm(client, guildId, userId);
+  if (!isUnlocked(checkFarm, info)) return { farm: checkFarm, userData: checkData, note: `${lockNote(info)} لهذا الحيوان.` };
+
+  const userData = await EconomyService.removeMoney(client, guildId, userId, info.cost, 'farm_buy_animal');
+  const farm = getFarmState(userData);
+  if (!farm.animals[animalKey]) farm.animals[animalKey] = { count: 0, collectAt: 0 };
+  farm.animals[animalKey].count += 1;
+  if (farm.animals[animalKey].collectAt === 0) farm.animals[animalKey].collectAt = Date.now() + info.produceSeconds * 1000;
+  await setEconomyData(client, guildId, userId, userData);
+  return { farm, userData, note: `🐣 اشتريت ${info.emoji} ${info.label}، الآن تملك ${farm.animals[animalKey].count}.` };
+}
+
+async function doCollect(client, guildId, userId) {
+  const userData = await getEconomyData(client, guildId, userId);
+  const farm = getFarmState(userData);
+  const now = Date.now();
+  const collected = {};
+  for (const [animal, entry] of Object.entries(farm.animals)) {
+    if (entry.count > 0 && entry.collectAt <= now) {
+      const product = ANIMALS[animal].product;
+      collected[product] = (collected[product] || 0) + entry.count;
+      entry.collectAt = now + ANIMALS[animal].produceSeconds * 1000;
+    }
+  }
+  if (Object.keys(collected).length === 0) return { farm, userData, note: '⏳ لا توجد منتجات جاهزة للجمع بعد.' };
+  for (const [product, qty] of Object.entries(collected)) addItem(farm, product, qty);
+  await setEconomyData(client, guildId, userId, userData);
+  const note = '🧺 جمعت: ' + Object.entries(collected).map(([p, q]) => `${itemEmoji(p)}×${q}`).join('، ');
+  return { farm, userData, note };
+}
+
+async function doBuild(client, guildId, userId, key) {
+  const info = FACTORIES[key] || REAL_ESTATE[key];
+  const { farm: checkFarm, userData: checkData } = await loadFarm(client, guildId, userId);
+  if (!isUnlocked(checkFarm, info)) return { farm: checkFarm, userData: checkData, note: `${lockNote(info)} لهذا المبنى.` };
+  if (checkFarm.buildings.includes(key)) return { farm: checkFarm, userData: checkData, note: '⚠️ تملك هذا المبنى بالفعل.' };
+
+  const userData = await EconomyService.removeMoney(client, guildId, userId, info.cost, 'farm_build_' + key);
+  const farm = getFarmState(userData);
+  if (!farm.buildings.includes(key)) farm.buildings.push(key);
+  await setEconomyData(client, guildId, userId, userData);
+  return { farm, userData, note: `🏗️ تم بناء ${info.emoji} ${info.label}!` };
+}
+
+async function doHire(client, guildId, userId, key) {
+  const info = WORKERS[key];
+  const { farm: checkFarm, userData: checkData } = await loadFarm(client, guildId, userId);
+  if (!isUnlocked(checkFarm, info)) return { farm: checkFarm, userData: checkData, note: `${lockNote(info)} لهذا العامل.` };
+  if (checkFarm.workers.includes(key)) return { farm: checkFarm, userData: checkData, note: '⚠️ لديك هذا العامل بالفعل.' };
+
+  const userData = await EconomyService.removeMoney(client, guildId, userId, info.cost, 'farm_hire_' + key);
+  const farm = getFarmState(userData);
+  if (!farm.workers.includes(key)) farm.workers.push(key);
+  await setEconomyData(client, guildId, userId, userData);
+  return { farm, userData, note: `👷 تم تعيين ${info.emoji} ${info.label}!` };
+}
+
+async function doProcess(client, guildId, userId, factoryKey) {
+  const info = FACTORIES[factoryKey];
+  const userData = await getEconomyData(client, guildId, userId);
+  const farm = getFarmState(userData);
+  if (!farm.buildings.includes(factoryKey)) return { farm, userData, note: `❌ تحتاج تبني ${info.label} أولاً.` };
+
+  for (const [item, qty] of Object.entries(info.recipe)) {
+    if ((farm.inventory[item] || 0) < qty) {
+      return { farm, userData, note: `❌ تحتاج ${qty}× ${itemLabel(item)} ولا تملك ما يكفي (تملك ${farm.inventory[item] || 0}).` };
+    }
+  }
+  for (const [item, qty] of Object.entries(info.recipe)) removeItem(farm, item, qty);
+  addItem(farm, info.output, 1);
+  await setEconomyData(client, guildId, userId, userData);
+  return { farm, userData, note: `⚙️ صنّعت 1× ${info.outputEmoji} ${info.outputLabel} من ${info.label}.` };
+}
+
+async function doSell(client, guildId, userId, itemRaw, qtyRaw) {
+  const item = String(itemRaw || '').trim().toLowerCase();
+  const qty = parseInt(qtyRaw, 10);
+
+  if (!item || !Number.isInteger(qty) || qty <= 0) return { note: '❌ أدخل اسم عنصر وكمية صحيحة.' };
+  const basePrice = sellPrice(item);
+  if (basePrice == null) return { note: `❌ العنصر "${item}" غير قابل للبيع أو غير موجود.` };
+
+  const userData = await getEconomyData(client, guildId, userId);
+  const farm = getFarmState(userData);
+  if (!removeItem(farm, item, qty)) return { farm, userData, note: `❌ لا تملك ${qty}× ${itemLabel(item)} في مخزونك.` };
+  await setEconomyData(client, guildId, userId, userData);
+
+  const market = getMarketMultiplier();
+  const total = Math.round(basePrice * qty * market);
+  const finalData = await EconomyService.addMoney(client, guildId, userId, total, 'farm_sell_' + item);
+  finalData.farm = farm;
+  await setEconomyData(client, guildId, userId, finalData);
+
+  let note = `💰 بعت ${qty}× ${itemEmoji(item)} ${itemLabel(item)} مقابل ${money(total)}`;
+  if (market > 1.2) note += ' 📈 طفرة شرائية!';
+  return { farm, userData: finalData, note };
+}
+
+// ---------------------------------------------------------------------------
+// الأمر
+// ---------------------------------------------------------------------------
+export default {
+  data: new SlashCommandBuilder().setName('farm').setDescription('لوحة تحكم لعبة إمبراطورية المزرعة الاقتصادية'),
+
+  async execute(interaction) {
+    const client = interaction.client;
+    const guildId = interaction.guildId;
+    const userId = interaction.user.id;
+
+    try {
+      const { userData, farm } = await loadFarm(client, guildId, userId);
+      await setEconomyData(client, guildId, userId, userData);
+
+      const view = renderMain(farm, userData);
+      await interaction.reply(view);
+      const message = await interaction.fetchReply();
+
+      const collector = message.createMessageComponentCollector({ time: SESSION_MS });
+
+      collector.on('collect', async (i) => {
+        try {
+          if (i.user.id !== userId) {
+            await i.reply({ content: '🔒 هذه اللوحة ليست لك، استخدم `/farm` بنفسك.', ephemeral: true });
+            return;
+          }
+
+          if (i.isStringSelectMenu() && i.customId === 'farm_menu') {
+            const section = i.values[0];
+            const { userData: ud, farm: f } = await loadFarm(client, guildId, userId);
+            await setEconomyData(client, guildId, userId, ud);
+
+            const views = {
+              crops: renderCrops(f),
+              animals: renderAnimals(f),
+              factories: renderFactories(f),
+              realestate: renderRealEstate(f),
+              workers: renderWorkers(f),
+              inventory: renderInventory(f),
+              market: renderMarket(),
+              help: renderHelp()
+            };
+            await i.update(views[section] || renderMain(f, ud));
+            return;
+          }
+
+          if (i.isButton()) {
+            const id = i.customId;
+
+            if (id === 'farm_back') {
+              const { userData: ud, farm: f } = await loadFarm(client, guildId, userId);
+              await setEconomyData(client, guildId, userId, ud);
+              await i.update(renderMain(f, ud));
+              return;
+            }
+
+            if (id === 'farm_sell') {
+              const modal = new ModalBuilder().setCustomId('farm_sell_modal').setTitle('💰 بيع عنصر من المخزون');
+              const itemInput = new TextInputBuilder()
+                .setCustomId('farm_sell_item')
+                .setLabel('اسم العنصر (بالإنجليزي مثل wheat)')
+                .setStyle(TextInputStyle.Short)
+                .setRequired(true);
+              const qtyInput = new TextInputBuilder().setCustomId('farm_sell_qty').setLabel('الكمية').setStyle(TextInputStyle.Short).setRequired(true);
+              modal.addComponents(new ActionRowBuilder().addComponents(itemInput), new ActionRowBuilder().addComponents(qtyInput));
+              await i.showModal(modal);
+
+              const submitted = await i
+                .awaitModalSubmit({ filter: (m) => m.customId === 'farm_sell_modal' && m.user.id === userId, time: 60000 })
+                .catch(() => null);
+              if (!submitted) return;
+
+              const itemVal = submitted.fields.getTextInputValue('farm_sell_item');
+              const qtyVal = submitted.fields.getTextInputValue('farm_sell_qty');
+              const result = await doSell(client, guildId, userId, itemVal, qtyVal);
+              const farmForView = result.farm || (await loadFarm(client, guildId, userId)).farm;
+              const view = renderInventory(farmForView);
+              view.content = result.note;
+              await submitted.update(view);
+              return;
+            }
+
+            let result = null;
+            if (id.startsWith('farm_plant_')) result = await doPlant(client, guildId, userId, id.replace('farm_plant_', ''));
+            else if (id === 'farm_harvest') result = await doHarvest(client, guildId, userId);
+            else if (id.startsWith('farm_buyanimal_')) result = await doBuyAnimal(client, guildId, userId, id.replace('farm_buyanimal_', ''));
+            else if (id === 'farm_collect') result = await doCollect(client, guildId, userId);
+            else if (id.startsWith('farm_build_')) result = await doBuild(client, guildId, userId, id.replace('farm_build_', ''));
+            else if (id.startsWith('farm_hire_')) result = await doHire(client, guildId, userId, id.replace('farm_hire_', ''));
+            else if (id.startsWith('farm_process_')) result = await doProcess(client, guildId, userId, id.replace('farm_process_', ''));
+
+            if (result) {
+              let view;
+              const key = id.replace(/^farm_(plant|buyanimal|build|hire|process)_/, '');
+              if (id.startsWith('farm_plant_') || id === 'farm_harvest') view = renderCrops(result.farm);
+              else if (id.startsWith('farm_buyanimal_') || id === 'farm_collect') view = renderAnimals(result.farm);
+              else if (id.startsWith('farm_process_')) view = renderFactories(result.farm);
+              else if (id.startsWith('farm_build_') && FACTORIES[key]) view = renderFactories(result.farm);
+              else if (id.startsWith('farm_build_') && REAL_ESTATE[key]) view = renderRealEstate(result.farm);
+              else if (id.startsWith('farm_hire_')) view = renderWorkers(result.farm);
+              else view = renderMain(result.farm, result.userData);
+
+              view.content = result.note;
+              await i.update(view);
+            }
+          }
+        } catch (err) {
+          const msg = errMsg(err);
+          try {
+            if (!i.replied && !i.deferred) await i.reply({ content: `❌ ${msg}`, ephemeral: true });
+            else await i.followUp({ content: `❌ ${msg}`, ephemeral: true });
+          } catch (_) {
+            /* تجاهل فشل إرسال رسالة الخطأ نفسها */
+          }
+        }
+      });
+
+      collector.on('end', async () => {
+        try {
+          await interaction.editReply({ components: [] });
+        } catch (_) {
+          /* الرسالة قد تكون محذوفة أو منتهية الصلاحية */
+        }
+      });
+    } catch (error) {
+      const message = errMsg(error);
+      if (interaction.replied || interaction.deferred) {
+        await interaction.followUp({ content: `❌ ${message}`, ephemeral: true });
+      } else {
+        await interaction.reply({ content: `❌ ${message}`, ephemeral: true });
+      }
+    }
+  }
+};
